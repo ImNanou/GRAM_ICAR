@@ -1,11 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Spyder Editor
 
-This is a temporary script file.
-"""
 import numpy as np
 import time 
+import math
+
 class Air:
     """        
     The air properties are calculated following Rasmussen (1997).
@@ -31,11 +28,24 @@ class Air:
         - temperature: air temperature in Celcius
         - pressure: atmospheric pressure in Pascal
         - humidity: relative air humidity in %
-        
         """
+        #these 3 attributes are the main attributes.
         self._temperature = temperature#(C)
         self._pressure = pressure#(Pa)
         self._humidity = humidity#(%) value between [0,100]
+        
+        #first celerity and density is not known and will be determined
+        #later by their repective method 
+        self.celerity_ = math.nan
+        self.density_ = math.nan      
+        
+        #Other air properties:
+        self.saturation_vapor_pressure =  math.nan#Saturation water vapor pressure
+        self.enhancement_factor =  math.nan #Enhancement factor
+        self.mole_fraction_vapor =  math.nan #Mole fraction of water vapor in air
+        self.compressibility_factor =  math.nan #Compressibility factor
+        self.mole_fraction_C02 =  math.nan#Mole fraction of carbon-dioxide in air
+        
         
         self.calculation()
 
@@ -47,23 +57,22 @@ class Air:
         t = self.temperature 
         T = t+273.15
         
-        #Saturation water vapor pressure
-        psv = np.exp(Air.a_i0[0]*T**2+Air.a_i0[1]*T+Air.a_i0[2]+Air.a_i0[3]*T**-1)
-        #Enhancement factor    
-        ef = Air.a_i1[0]+Air.a_i1[1]*self.pressure+Air.a_i1[2]*t
-        #Mole fraction of water vapor in air
-        xw = self.humidity/100*psv/self.pressure*ef
-        #Compressibility factor
-        Cf = 1-self.pressure/T*(Air.a_i2[0]+Air.a_i2[1]*t+Air.a_i2[2]*t**2+(Air.a_i2[3]+Air.a_i2[4]*t)*xw+(Air.a_i2[5]+Air.a_i2[6]*t)*xw**2) \
-        +(self.pressure/T)**2*(Air.a_i2[7]+Air.a_i2[8]*xw**2)
-        #Mole fraction of carbon-dioxide in air
-        xc = 0.0004#recommanded laboratory value
+       
+        self.saturation_vapor_pressure = np.exp(Air.a_i0[0]*T**2+Air.a_i0[1]*T+Air.a_i0[2]+Air.a_i0[3]*T**-1)
+            
+        self.enhancement_factor = Air.a_i1[0]+Air.a_i1[1]*self.pressure+Air.a_i1[2]*t
         
-        setattr(self,'psv',psv)
-        setattr(self,'ef',ef)
-        setattr(self,'xw',xw)
-        setattr(self,'Cf',Cf)
-        setattr(self,'xc',xc)
+        self.mole_fraction_vapor = self.humidity/100*self.saturation_vapor_pressure/self.pressure*self.enhancement_factor
+        
+        self.compressibility_factor = 1-self.pressure/T*(Air.a_i2[0]+Air.a_i2[1]*t\
+            +Air.a_i2[2]*t**2+(Air.a_i2[3]+Air.a_i2[4]*t)*self.mole_fraction_vapor\
+                +(Air.a_i2[5]+Air.a_i2[6]*t)*self.mole_fraction_vapor**2) \
+        +(self.pressure/T)**2*(Air.a_i2[7]+Air.a_i2[8]*self.mole_fraction_vapor**2)
+        
+        
+        self.mole_fraction_C02 = 0.0004#recommanded laboratory value
+        
+
         
     def density(self):
         """ 
@@ -71,13 +80,12 @@ class Air:
         If the attribute exist the last value of the object density is directly 
         returned.
         """
-        if not(hasattr(self,'rho0')):
+        if math.isnan(self.density_):
             T = self.temperature+273.15
             #Density of air
-            rho0 = (3.48349+1.44*(self.xc-0.0004))*1E-3*self.pressure/(self.Cf*T)*(1-0.3780*self.xw)
-            setattr(self,'rho0',rho0)
-            
-        return self.rho0
+            self.density_ = (3.48349+1.44*(self.mole_fraction_C02-0.0004))*1E-3*self.pressure/(self.compressibility_factor*T)*(1-0.3780*self.mole_fraction_vapor)
+                        
+        return self.density_
         
         
     def celerity(self):
@@ -86,13 +94,18 @@ class Air:
         If the attribute exist the last value of the object density is directly 
         returned.
         """     
-        if not(hasattr(self,'c0')):
+        if math.isnan(self.celerity_):
             t = self.temperature   
   
-            c0 = Air.a_i3[0]+Air.a_i3[1]*t+(Air.a_i3[3]+Air.a_i3[4]*t+Air.a_i3[5]*t**2)*self.xw+(Air.a_i3[6]+Air.a_i3[7]*t+Air.a_i3[8]*t**2)*self.pressure\
-                +(Air.a_i3[9]+Air.a_i3[10]*t+Air.a_i3[11]*t**2)*self.xc+Air.a_i3[12]*self.xw**2+Air.a_i3[13]*self.pressure**2+Air.a_i3[14]*self.xc+Air.a_i3[15]*self.xw*self.pressure*self.xc
-            setattr(self,'c0',c0)
-        return self.c0
+            self.celerity_ = Air.a_i3[0]+Air.a_i3[1]*t\
+                +(Air.a_i3[3]+Air.a_i3[4]*t+Air.a_i3[5]*t**2)*self.mole_fraction_vapor\
+                +(Air.a_i3[6]+Air.a_i3[7]*t+Air.a_i3[8]*t**2)*self.pressure\
+                +(Air.a_i3[9]+Air.a_i3[10]*t+Air.a_i3[11]*t**2)*self.mole_fraction_C02\
+                +Air.a_i3[12]*self.mole_fraction_vapor**2+Air.a_i3[13]*self.pressure**2\
+                +Air.a_i3[14]*self.mole_fraction_C02+Air.a_i3[15]*self.mole_fraction_vapor*self.pressure*self.mole_fraction_C02
+           
+        return self.celerity_
+    
     
     # property
     def _setmainattributes(attr):
@@ -101,16 +114,16 @@ class Air:
         the celerity and denisity are computed.
         """          
         def set_any(self, value):
+            #change the value of the corresponding attribute
             setattr(self, attr, value)
-    #(self,new_temperature,name):
-      #  setattr(self,name,new_temperature)
+            
+            #compute the new
             self.calculation()
-            if hasattr(self,'c0'):
-                del self.c0
-                self.celerity()       
-            if hasattr(self,'rho0'):
-                del self.rho0
-                self.density()
+            
+            #reset celerity_ and density_
+            self.celerity_ = math.nan
+            self.density_ = math.nan
+                
         return set_any
 
     temperature = property(fget = lambda self: self._temperature, fset=_setmainattributes("_temperature"))
