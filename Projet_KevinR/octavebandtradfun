@@ -2,6 +2,13 @@ def octavebandtradfun(minfreq, maxfreq, type):
     # Les fréquences exactes des bandes d'octave, tiers d'octave, sixième d'octave
     # et douzième d'octave sont stockées dans ces tableaux.
     # Toutes les spécifications sont basées sur la base 10, conformément à la norme IEC 61260-1:2014.
+# TEST :
+# minfreq = 31.5
+# maxfreq = 16000
+# band_type = 'one'
+# frequencies = octavebandtradfun(minfreq, maxfreq, band_type)
+# print(frequencies)
+
 
     fullband = []
 
